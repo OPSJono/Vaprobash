@@ -1,19 +1,19 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
+# Root of project folder
+# Set this to the root of the InnovedV2API folder on your machine.
+project_folder = "A:/Code/vle2"
+
 # Config Github Settings
 github_username = "OPSJono"
 github_repo     = "Vaprobash"
-github_branch   = "master"
+github_branch   = "innoved"
 github_url      = "https://raw.githubusercontent.com/#{github_username}/#{github_repo}/#{github_branch}"
-
-# Because this:https://developer.github.com/changes/2014-12-08-removing-authorizations-token/
-# https://github.com/settings/tokens
-github_pat          = ""
 
 # Server Configuration
 
-hostname        = "vle.innovedv2api.vm"
+hostname        = "auto.InnovedV2API.vm"
 
 # Set a local private network IP address.
 # See http://en.wikipedia.org/wiki/Private_network for explanation
@@ -61,14 +61,7 @@ composer_packages     = [        # List any global Composer packages that you wa
   #"squizlabs/php_codesniffer:1.5.*",
 ]
 
-# Default web server document root
-# Symfony's public directory is assumed "web"
-# Laravel's public directory is assumed "public"
 public_folder         = "/var/www/html"
-
-laravel_root_folder   = "/vagrant/laravel" # Where to install Laravel. Will `composer install` if a composer.json file exists
-laravel_version       = "latest-stable" # If you need a specific version of Laravel, set it here
-symfony_root_folder   = "/vagrant/symfony" # Where to install Symfony.
 
 
 Vagrant.configure("2") do |config|
@@ -76,7 +69,7 @@ Vagrant.configure("2") do |config|
   # Set server to Ubuntu 15.04
   config.vm.box = "ubuntu/trusty64"
 
-  config.vm.define "Vaprobash" do |vapro|
+  config.vm.define "Innoved VM" do |vapro|
   end
 
   if Vagrant.has_plugin?("vagrant-hostmanager")
@@ -98,7 +91,7 @@ Vagrant.configure("2") do |config|
   config.ssh.forward_agent = true
 
   # Use NFS for the shared folder
-  config.vm.synced_folder ".", "/vagrant",
+  config.vm.synced_folder project_folder, "/srv",
     id: "core",
     :nfs => true,
     :mount_options => ['rw']
@@ -130,73 +123,38 @@ Vagrant.configure("2") do |config|
 
   end
 
-  # If using VMWare Fusion
-  config.vm.provider "vmware_fusion" do |vb, override|
-    override.vm.box_url = "http://files.vagrantup.com/precise64_vmware.box"
-
-    # Set server memory
-    vb.vmx["memsize"] = server_memory
-
-  end
-
-  # If using Vagrant-Cachier
-  # http://fgrehm.viewdocs.io/vagrant-cachier
-  if Vagrant.has_plugin?("vagrant-cachier")
-    # Configure cached packages to be shared between instances of the same base box.
-    # Usage docs: http://fgrehm.viewdocs.io/vagrant-cachier/usage
-    config.cache.scope = :box
-
-    config.cache.synced_folder_opts = {
-        type: :nfs,
-        mount_options: ['rw', 'vers=3', 'tcp', 'nolock']
-    }
-  end
-
-  # Adding vagrant-digitalocean provider - https://github.com/smdahlen/vagrant-digitalocean
-  # Needs to ensure that the vagrant plugin is installed
-  config.vm.provider :digital_ocean do |provider, override|
-    override.ssh.private_key_path = '~/.ssh/id_rsa'
-    override.ssh.username = 'vagrant'
-    override.vm.box = 'digital_ocean'
-    override.vm.box_url = "https://github.com/smdahlen/vagrant-digitalocean/raw/master/box/digital_ocean.box"
-
-    provider.token = 'YOUR TOKEN'
-    provider.image = 'ubuntu-14-04-x64'
-    provider.region = 'nyc2'
-    provider.size = '512mb'
-  end
-
   ####
   # Base Items
   ##########
 
+  # Fix "stdin is not a tty" error message when provisioning.
+  # Ref: http://foo-o-rama.com/vagrant--stdin-is-not-a-tty--fix.html
+  config.vm.provision "fix-no-tty", type: "shell" do |s|
+    s.privileged = false
+    s.inline = "sudo sed -i '/tty/!s/mesg n/tty -s \\&\\& mesg n/' /root/.profile"
+  end
+
   # Provision Base Packages
-  config.vm.provision "shell", path: "#{github_url}/scripts/base.sh", args: [github_url, server_swap, server_timezone]
+  config.vm.provision "shell", path: "scripts/base.sh", args: [github_url, server_swap, server_timezone]
 
   # optimize base box
-  config.vm.provision "shell", path: "#{github_url}/scripts/base_box_optimizations.sh", privileged: true
+  config.vm.provision "shell", path: "scripts/base_box_optimizations.sh", privileged: true
 
   # Provision PHP
-  config.vm.provision "shell", path: "#{github_url}/scripts/php.sh", args: [php_timezone, hhvm, php_version]
-
-  # Enable MSSQL for PHP
-  # config.vm.provision "shell", path: "#{github_url}/scripts/mssql.sh"
+  config.vm.provision "shell", path: "scripts/php.sh", args: [php_timezone, hhvm, php_version]
 
   # Provision Vim
-  config.vm.provision "shell", path: "#{github_url}/scripts/vim.sh", args: github_url
-
-  # Provision Docker
-  # config.vm.provision "shell", path: "#{github_url}/scripts/docker.sh", args: "permissions"
+  config.vm.provision "shell", path: "scripts/vim.sh", args: github_url
 
   ####
   # Web Servers
   ##########
 
   # Provision Apache Base
-  config.vm.provision "shell", path: "#{github_url}/scripts/apache.sh", args: [server_ip, public_folder, hostname, github_url]
+  config.vm.provision "shell", path: "scripts/apache.sh", args: [server_ip, public_folder, hostname, github_url]
 
   # Provision Nginx Base
-  # config.vm.provision "shell", path: "#{github_url}/scripts/nginx.sh", args: [server_ip, public_folder, hostname, github_url]
+  # config.vm.provision "shell", path: "scripts/nginx.sh", args: [server_ip, public_folder, hostname, github_url]
 
 
   ####
@@ -204,68 +162,19 @@ Vagrant.configure("2") do |config|
   ##########
 
   # Provision MySQL
-  config.vm.provision "shell", path: "#{github_url}/scripts/mysql.sh", args: [mysql_root_password, mysql_version, mysql_enable_remote]
-
-  # Provision PostgreSQL
-  # config.vm.provision "shell", path: "#{github_url}/scripts/pgsql.sh", args: pgsql_root_password
-
-  # Provision SQLite
-  # config.vm.provision "shell", path: "#{github_url}/scripts/sqlite.sh"
-
-  # Provision RethinkDB
-  # config.vm.provision "shell", path: "#{github_url}/scripts/rethinkdb.sh", args: pgsql_root_password
-
-  # Provision Couchbase
-  # config.vm.provision "shell", path: "#{github_url}/scripts/couchbase.sh"
-
-  # Provision CouchDB
-  # config.vm.provision "shell", path: "#{github_url}/scripts/couchdb.sh"
-
-  # Provision MongoDB
-  # config.vm.provision "shell", path: "#{github_url}/scripts/mongodb.sh", args: [mongo_enable_remote, mongo_version]
-
-  # Provision MariaDB
-  # config.vm.provision "shell", path: "#{github_url}/scripts/mariadb.sh", args: [mysql_root_password, mysql_enable_remote]
-
-  # Provision Neo4J
-  # config.vm.provision "shell", path: "#{github_url}/scripts/neo4j.sh"
+  config.vm.provision "shell", path: "scripts/mysql.sh", args: [mysql_root_password, mysql_version, mysql_enable_remote]
 
   ####
   # In-Memory Stores
   ##########
 
-  # Install Memcached
-  # config.vm.provision "shell", path: "#{github_url}/scripts/memcached.sh"
-
   # Provision Redis (without journaling and persistence)
-  # config.vm.provision "shell", path: "#{github_url}/scripts/redis.sh"
+  # config.vm.provision "shell", path: "scripts/redis.sh"
 
   # Provision Redis (with journaling and persistence)
-  # config.vm.provision "shell", path: "#{github_url}/scripts/redis.sh", args: "persistent"
+  # config.vm.provision "shell", path: "scripts/redis.sh", args: "persistent"
   # NOTE: It is safe to run this to add persistence even if originally provisioned without persistence
 
-
-  ####
-  # Utility (queue)
-  ##########
-
-  # Install Beanstalkd
-  # config.vm.provision "shell", path: "#{github_url}/scripts/beanstalkd.sh"
-
-  # Install Heroku Toolbelt
-  # config.vm.provision "shell", path: "https://toolbelt.heroku.com/install-ubuntu.sh"
-
-  # Install Supervisord
-  # config.vm.provision "shell", path: "#{github_url}/scripts/supervisord.sh"
-
-  # Install Kibana
-  # config.vm.provision "shell", path: "#{github_url}/scripts/kibana.sh"
-
-  # Install ØMQ
-  # config.vm.provision "shell", path: "#{github_url}/scripts/zeromq.sh"
-
-  # Install RabbitMQ
-  # config.vm.provision "shell", path: "#{github_url}/scripts/rabbitmq.sh", args: [rabbitmq_user, rabbitmq_password]Vagrantfile
 
   ####
   # Local Scripts
@@ -274,11 +183,5 @@ Vagrant.configure("2") do |config|
   ##########
   # config.vm.provision "shell", path: "./local-script.sh"
 
-  # Fix "stdin is not a tty" error message when provisioning.
-  # Ref: http://foo-o-rama.com/vagrant--stdin-is-not-a-tty--fix.html
-  config.vm.provision "fix-no-tty", type: "shell" do |s|
-      s.privileged = false
-      s.inline = "sudo sed -i '/tty/!s/mesg n/tty -s \\&\\& mesg n/' /root/.profile"
-  end
 
 end
